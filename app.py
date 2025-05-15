@@ -1,22 +1,23 @@
-
 import streamlit as st
 import pandas as pd
 import re
 from datetime import timedelta
+from io import BytesIO
+import xlsxwriter
 
 st.set_page_config(page_title="Reporte y Disponibilidad", layout="wide")
 
-# Sidebar de navegación
-st.sidebar.title("📂 Navegación")
-seccion = st.sidebar.radio(
+# Sidebar
+st.sidebar.title("📁 Formularios")
+seccion = st.sidebar.selectbox(
     "Selecciona una sección:",
-    ["📊 Reporte de estimaciones", "🧾 Consulta Disponibilidad"]
+    ["📊 Reporte de estimaciones por usuario", "🧾 Consulta Disponibilidad"]
 )
 
 # -------------------------------
 # SECCIÓN 1: REPORTE DE ESTIMACIONES POR USUARIO
 # -------------------------------
-if seccion == "📊 Reporte de estimaciones":
+if seccion == "📊 Reporte de estimaciones por usuario":
     st.markdown("<h1 style='color:#0030f6'>📊 Reporte de estimaciones por usuario</h1>", unsafe_allow_html=True)
 
     uploaded_file = st.file_uploader(
@@ -138,6 +139,18 @@ if seccion == "🧾 Consulta Disponibilidad":
         key="disponibilidad"
     )
 
+    def to_excel(df, nombre_hoja='Sheet1'):
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            df.to_excel(writer, index=False, sheet_name=nombre_hoja)
+            workbook = writer.book
+            worksheet = writer.sheets[nombre_hoja]
+            for idx, col in enumerate(df.columns):
+                column_len = max(df[col].astype(str).map(len).max(), len(col))
+                worksheet.set_column(idx, idx, column_len + 2)
+        processed_data = output.getvalue()
+        return processed_data
+
     if uploaded_files:
         if len(uploaded_files) > 6:
             st.error("⚠️ Solo se permiten hasta 6 archivos.")
@@ -177,39 +190,48 @@ if seccion == "🧾 Consulta Disponibilidad":
                 df_disponibilidad = df_merged[mask]
 
                 columnas_a_mostrar = ['Author', 'Comment', 'Time Spent Final', 'Periodo']
-                df_detalle = df_disponibilidad[columnas_a_mostrar].rename(columns={'Time Spent Final': 'Time Spent'})
+                df_disponibilidad = df_disponibilidad[columnas_a_mostrar]
+                df_disponibilidad = df_disponibilidad.rename(columns={'Time Spent Final': 'Time Spent'})
 
-                # -------------------------------
-                # FILTRO MULTISELECT POR AUTOR
-                # -------------------------------
-                st.markdown("<h4 style='color:#f15a30'>👤 Registros con comentarios de disponibilidad</h4>", unsafe_allow_html=True)
-
-                autores_unicos = sorted(df_detalle['Author'].dropna().unique())
+                st.markdown("### 👤 Registros con comentarios de disponibilidad")
+                autores_unicos = sorted(df_disponibilidad['Author'].dropna().unique())
                 autores_seleccionados = st.multiselect(
-                        "Filtrar por autor(es) (opcional):", 
-                        options=autores_unicos,
-                        key="filtro_autor_disponibilidad")
+                    "Filtrar por autor(es) (opcional):", 
+                    options=autores_unicos,
+                    key="filtro_autor_disponibilidad"
+                )
 
-                # Si no hay selección, mostrar todos
                 if autores_seleccionados:
-                    df_detalle_filtrado = df_detalle[df_detalle['Author'].isin(autores_seleccionados)]
+                    df_disponibilidad_filtrado = df_disponibilidad[df_disponibilidad['Author'].isin(autores_seleccionados)]
                 else:
-                    df_detalle_filtrado = df_detalle
+                    df_disponibilidad_filtrado = df_disponibilidad
 
+                st.dataframe(df_disponibilidad_filtrado)
 
-                st.dataframe(df_detalle_filtrado)
+                excel_bytes_detalle = to_excel(df_disponibilidad_filtrado, "Detalle")
+                st.download_button(
+                    label="📥 Descargar registros como Excel",
+                    data=excel_bytes_detalle,
+                    file_name="disponibilidad_detallada.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
 
-                # -------------------------------
-                # RESUMEN DE HORAS POR AUTOR Y PERIODO
-                # -------------------------------
-                st.markdown("<h4 style='color:#f15a30'>📊 Resumen de horas por autor y periodo</h4>", unsafe_allow_html=True)
+                st.markdown("### 📊 Resumen de horas por autor y periodo")
                 df_resumen = (
-                    df_detalle
+                    df_disponibilidad_filtrado
                     .groupby(['Author', 'Periodo'], as_index=False)['Time Spent']
                     .sum()
-                    .sort_values(by=['Author'])
+                    .sort_values(by=['Author', 'Periodo'])
                 )
                 st.dataframe(df_resumen)
+
+                excel_bytes_resumen = to_excel(df_resumen, "Resumen")
+                st.download_button(
+                    label="📥 Descargar resumen como Excel",
+                    data=excel_bytes_resumen,
+                    file_name="resumen_autor_periodo.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
 
             except Exception as e:
                 st.error(f"❌ Error al procesar los archivos: {e}")
