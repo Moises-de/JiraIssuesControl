@@ -217,15 +217,47 @@ if seccion == "🧾 Consulta Disponibilidad":
                 )
 
                 st.markdown("### 📊 Resumen de horas por autor y periodo")
+                # Separar "Periodo" en Mes y Año
+                df_disponibilidad_filtrado[['Mes', 'Año']] = df_disponibilidad_filtrado['Periodo'].str.extract(r'(\w+)\s+(\d{4})')
+                df_disponibilidad_filtrado['Año'] = df_disponibilidad_filtrado['Año'].astype(int)
+
+                # Agrupar por Author, Periodo, Mes, Año
                 df_resumen = (
                     df_disponibilidad_filtrado
-                    .groupby(['Author', 'Periodo'], as_index=False)['Time Spent']
+                    .groupby(['Author', 'Periodo', 'Mes', 'Año'], as_index=False)['Time Spent']
                     .sum()
-                    .sort_values(by=['Author', 'Periodo'])
+                    .sort_values(by=['Author', 'Año', 'Mes'])
                 )
-                st.dataframe(df_resumen)
 
-                excel_bytes_resumen = to_excel(df_resumen, "Resumen")
+                # FILTROS MULTISELECT
+                st.markdown("### 🔍 Filtros")
+
+                # Opciones únicas
+                autores_unicos = sorted(df_resumen['Author'].dropna().unique())
+                meses_unicos = sorted(df_resumen['Mes'].dropna().unique())
+                años_unicos = sorted(df_resumen['Año'].dropna().unique())
+
+                # Filtros UI
+                autores_seleccionados = st.multiselect("Filtrar por autor(es):", options=autores_unicos)
+                meses_seleccionados = st.multiselect("Filtrar por mes(es):", options=meses_unicos)
+                años_seleccionados = st.multiselect("Filtrar por año(s):", options=años_unicos)
+
+                # Aplicar filtros
+                df_resumen_filtrado = df_resumen.copy()
+
+                if autores_seleccionados:
+                    df_resumen_filtrado = df_resumen_filtrado[df_resumen_filtrado['Author'].isin(autores_seleccionados)]
+                if meses_seleccionados:
+                    df_resumen_filtrado = df_resumen_filtrado[df_resumen_filtrado['Mes'].isin(meses_seleccionados)]
+                if años_seleccionados:
+                    df_resumen_filtrado = df_resumen_filtrado[df_resumen_filtrado['Año'].isin(años_seleccionados)]
+
+                # Mostrar tabla filtrada
+                st.markdown("### 📊 Resumen de horas por autor y periodo")
+                st.dataframe(df_resumen_filtrado)
+
+                # Exportar solo lo filtrado
+                excel_bytes_resumen = to_excel(df_resumen_filtrado, "Resumen")
                 st.download_button(
                     label="📥 Descargar resumen como Excel",
                     data=excel_bytes_resumen,
