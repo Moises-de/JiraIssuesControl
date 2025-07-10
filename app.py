@@ -11,7 +11,11 @@ st.set_page_config(page_title="Reporte y Disponibilidad", layout="wide")
 st.sidebar.title("📁 Formularios")
 seccion = st.sidebar.selectbox(
     "Selecciona una sección:",
-    ["📊 Reporte de estimaciones por usuario", "🧾 Consulta Disponibilidad"]
+    [
+        "📊 Reporte de estimaciones por usuario",
+        "🧾 Consulta Disponibilidad",
+        "📌 Reporte de gestión"
+    ]
 )
 
 # -------------------------------
@@ -21,7 +25,7 @@ if seccion == "📊 Reporte de estimaciones por usuario":
     st.markdown("<h1 style='color:#0030f6'>📊 Reporte de estimaciones por usuario</h1>", unsafe_allow_html=True)
 
     uploaded_file = st.file_uploader(
-        "Sube tu archivo Excel (ej: worklogs_2025-03-29_2025-04-29)", 
+        "Sube tu archivo Excel (ej: worklogs_2025-03-29_2025-04-29)",
         type=["xlsx"],
         key="reporte"
     )
@@ -196,7 +200,7 @@ if seccion == "🧾 Consulta Disponibilidad":
                 st.markdown("### 👤 Registros con comentarios de disponibilidad")
                 autores_unicos = sorted(df_disponibilidad['Author'].dropna().unique())
                 autores_seleccionados = st.multiselect(
-                    "Filtrar por autor(es) (opcional):", 
+                    "Filtrar por autor(es) (opcional):",
                     options=autores_unicos,
                     key="filtro_autor_disponibilidad"
                 )
@@ -216,54 +220,119 @@ if seccion == "🧾 Consulta Disponibilidad":
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
 
-                st.markdown("### 📊 Resumen de horas por autor y periodo")
-                # Separar "Periodo" en Mes y Año
-                df_disponibilidad_filtrado[['Mes', 'Año']] = df_disponibilidad_filtrado['Periodo'].str.extract(r'(\w+)\s+(\d{4})')
-                df_disponibilidad_filtrado['Año'] = df_disponibilidad_filtrado['Año'].astype(int)
-
-                # Agrupar por Author, Periodo, Mes, Año
-                df_resumen = (
-                    df_disponibilidad_filtrado
-                    .groupby(['Author', 'Periodo', 'Mes', 'Año'], as_index=False)['Time Spent']
-                    .sum()
-                    .sort_values(by=['Author', 'Año', 'Mes'])
-                )
-
-                # FILTROS MULTISELECT
-                st.markdown("### 🔍 Filtros")
-
-                # Opciones únicas
-                autores_unicos = sorted(df_resumen['Author'].dropna().unique())
-                meses_unicos = sorted(df_resumen['Mes'].dropna().unique())
-                años_unicos = sorted(df_resumen['Año'].dropna().unique())
-
-                # Filtros UI
-                autores_seleccionados = st.multiselect("Filtrar por autor(es):", options=autores_unicos)
-                meses_seleccionados = st.multiselect("Filtrar por mes(es):", options=meses_unicos)
-                años_seleccionados = st.multiselect("Filtrar por año(s):", options=años_unicos)
-
-                # Aplicar filtros
-                df_resumen_filtrado = df_resumen.copy()
-
-                if autores_seleccionados:
-                    df_resumen_filtrado = df_resumen_filtrado[df_resumen_filtrado['Author'].isin(autores_seleccionados)]
-                if meses_seleccionados:
-                    df_resumen_filtrado = df_resumen_filtrado[df_resumen_filtrado['Mes'].isin(meses_seleccionados)]
-                if años_seleccionados:
-                    df_resumen_filtrado = df_resumen_filtrado[df_resumen_filtrado['Año'].isin(años_seleccionados)]
-
-                # Mostrar tabla filtrada
-                st.markdown("### 📊 Resumen de horas por autor y periodo")
-                st.dataframe(df_resumen_filtrado)
-
-                # Exportar solo lo filtrado
-                excel_bytes_resumen = to_excel(df_resumen_filtrado, "Resumen")
-                st.download_button(
-                    label="📥 Descargar resumen como Excel",
-                    data=excel_bytes_resumen,
-                    file_name="resumen_autor_periodo.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
-
             except Exception as e:
                 st.error(f"❌ Error al procesar los archivos: {e}")
+
+# -------------------------------
+# SECCIÓN 3: REPORTE DE GESTIÓN
+# -------------------------------
+if seccion == "📌 Reporte de gestión":
+    st.markdown("<h1 style='color:#8700a6'>📌 Reporte de gestión</h1>", unsafe_allow_html=True)
+
+    uploaded_file = st.file_uploader(
+        "Sube el archivo Tracking a analizar (Excel)",
+        type=["xlsx"],
+        key="reporte_gestion"
+    )
+
+    clasificaciones = {
+    "Desarrollo": [
+        "desarrollo", "codificación", "codificacion", "programar", "implementación", "implementacion", "tabla", "tablas", "automatizaciones", "automatizacion", "automatización",
+        "implementar", "desarollar", "logica", "lógica", "desarrollar lógica", "commits", "commit", "automatizar", "validacion tecnica", "validación tecnica", "validacion técnica",
+        "validación técnica", "nifi", "update", "add",
+        "función", "funcion", "algoritmo", "variables de entorno", "migracion", "migración", "migrar", "power bi", "queue", "web hook", "webhook", "mejoras", "mejorar",
+        "base de datos", "migraciones", "integracion", "integrar", "api", "integración", "metabase", "databricks", "tarea interna",
+        "refactorización", "refactoring", "build", "merge", "push", "pull request", "predicción", "crear", "modificar", "modificacion", "modificación",
+        "revisión de código", "revision de codigo", "revisar codigo", "endpoint", "script", "componente web", "actualización", "actualizacion", "creacion", "creación"
+    ],
+
+    "Soporte": [
+        "error", "bug", "errores", "data fix", "datafix", "soporte", "incidente", "falla", "fallas", "daño", "problema", "ajustar", "ajustes", "formateo", "formatear",
+        "ticket de soporte", "error en producción", "helpdesk", "debugging", "fix", "logs", "vulnerabilidad", "windows", "instalar", "inactivar", "activar", "mantenimientos",
+        "servidores", "hotfix", "ticket", "validar", "validacion", "validación","monitoreo", "sophos", "alertas", "vulnerabilidades", "darktrace", "sin servicio", "mantenimiento"
+    ],
+
+    "Análisis y diseño": [
+        "análisis", "analisis", "requerimiento", "levantamiento", "especificación", "diseño", "arquitectura",
+        "diagrama", "funcionalidad", "modelo de datos", "historias", "backlog", "mockup",
+        "user story", "historia de usuario", "propuesta", "revision tecnica", "refinamiento",
+        "flujo", "investigar", "invertigacion"
+    ],
+
+    "Reunión de seguimiento": [
+        "reunión", "reunion", "daily", "weekly", "retro", "standup", "status", "comité", "comite",
+        "sprint review", "grooming", "ceremonia", "seguimiento", "coordinar", "coordinacion",
+        "llamada con", "sesión", "seguimientos", "revisión de avance", "revisión de avances",
+        "revision de avances", "revision de avance", "avances", "control de casos", "proveedor",
+        "gestión de casos", "gestión de proyectos", "gestion de proyecto", "gestion de proyectos", "gestión de proyecto","socializacion", "socialización",
+        "planificacion", "planeacion", "planeación", "week", "weekly", "meet", "estado de proyectos", "estado de proyecto"
+    ],
+
+    "Capacitación": [
+        "capacitacion", "capacitación", "formación", "formacion", "entrenamiento", "platzi", "udemy",
+        "curso", "taller", "onboarding", "aprendizaje", "induccion", "inducción", "estudio", "estudiar",
+        "repaso", "certificación", "certificacion", "webinar", "lectura tecnica", "clase"
+    ],
+
+    "Documentación": [
+        "documentación", "documentacion", "manual de usuario", "manual tecnico", "manual funcional",
+        "manual técnico", "instructivo", "documentación técnica", "documentacion tecnica",
+        "documentación tecnica", "documentacion técnica", "wiki", "diagrama descriptivo",
+        "resumen técnico", "documentación funcional", "documentacion funcional", "gitbook", "reporte"
+    ],
+    "Pruebas": [
+        "pruebas", "test", "tests", "qa", "testeo", "casos de prueba", "testing", "test case",
+        "test cases", "fixing", "debug", "escenarios de prueba", "escenario de prueba",
+        "control de calidad", "code review", "code reviews"
+    ],
+
+    "Disponibilidad": [
+        "en espera de asiganciones", "espera", "sin asignaciones", "sin actividad", "sin actividades",
+        "bloqueo", "inactividad", "sin asignación", "sin asignacion", "sin tareas", "sin avance",
+        "sin entregables", "pendiente", "ruta de aprendizaje", "sin requerimientos", "sin requerimiento"
+    ]
+}
+
+
+    def analizar_comentario(comentario):
+        comentario = str(comentario).lower()
+        coincidencias = set()
+
+        for categoria, palabras in clasificaciones.items():
+            for palabra in palabras:
+                if palabra in comentario:
+                    coincidencias.add(categoria)
+
+        # Elegimos la primera categoría encontrada para clasificar
+        clasificacion = list(coincidencias)[0] if coincidencias else "No clasificado"
+
+        # Si hay más de una categoría, marcar como supervisado
+        supervisado = "🚨" if len(coincidencias) > 1 else "✅"
+
+        return pd.Series([clasificacion, supervisado])
+
+    if uploaded_file:
+        try:
+            df = pd.read_excel(uploaded_file)
+
+            if 'Comment' not in df.columns or 'Issue Summary' not in df.columns:
+                st.error("❌ El archivo debe contener las columnas 'Comment' e 'Issue Summary'.")
+            else:
+                # Reemplazar comentarios vacíos por el Issue Summary
+                df['Comment'] = df['Comment'].fillna('').astype(str)
+                df['Issue Summary'] = df['Issue Summary'].fillna('').astype(str)
+                df['Comment'] = df.apply(
+                    lambda row: row['Comment'] if row['Comment'].strip() else row['Issue Summary'],
+                    axis=1
+                )
+
+                df[['Clasificación', 'Supervisado']] = df['Comment'].apply(analizar_comentario)
+
+                columnas_mostrar = ['Issue Key', 'Author', 'Comment', 'Time Spent', 'Clasificación', 'Supervisado']
+                columnas_existentes = [col for col in columnas_mostrar if col in df.columns]
+
+                st.markdown("### 🧮 Resultados clasificados")
+                st.dataframe(df[columnas_existentes].sort_values(by='Clasificación'))
+
+        except Exception as e:
+            st.error(f"❌ Error al procesar el archivo: {e}")
